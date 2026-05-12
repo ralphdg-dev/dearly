@@ -1,0 +1,29 @@
+{
+  "project_info": {
+    "project_number": "406078744191",
+    "project_id": "dearly-8e394",
+    "storage_bucket": "dearly-8e394.firebasestorage.app"
+  },
+  "client": [
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:406078744191:android:08f381296be8f73d7b814a",
+        "android_client_info": {
+          "package_name": "com.example.dearly"
+        }
+      },
+      "oauth_client": [],
+      "api_key": [
+        {
+          "current_key": "AIzaSyAvqeVLhMbjpEw9S800qMtz9JHCxSgZXnc"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": []
+        }
+      }
+    }
+  ],
+  "configuration_version": "1"
+}
