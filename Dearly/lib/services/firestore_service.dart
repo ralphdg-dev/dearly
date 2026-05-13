@@ -1,5 +1,7 @@
+import 'dart:io';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
+import 'package:firebase_storage/firebase_storage.dart';
 import '../models/journal_entry.dart';
 
 class FirestoreService {
@@ -7,8 +9,23 @@ class FirestoreService {
 
   final FirebaseFirestore _db = FirebaseFirestore.instance;
   final FirebaseAuth _auth = FirebaseAuth.instance;
+  final FirebaseStorage _storage = FirebaseStorage.instance;
 
   String? get _uid => _auth.currentUser?.uid;
+
+  // ── STORAGE ──────────────────────────────────────────────────────────────
+
+  Future<String> uploadProfilePicture(String userId, File file) async {
+    final ref = _storage.ref().child('user_avatars').child('$userId.jpg');
+    await ref.putFile(file);
+    return await ref.getDownloadURL();
+  }
+
+  Future<String> uploadEntryImage(String entryId, File file) async {
+    final ref = _storage.ref().child('entry_images').child('$entryId.jpg');
+    await ref.putFile(file);
+    return await ref.getDownloadURL();
+  }
 
   // ── ENTRIES ────────────────────────────────────────────────────────────────
 
@@ -24,19 +41,15 @@ class FirestoreService {
     await _db.collection('tbl_entries').doc(entryId).delete();
   }
 
-  // FIX FOR ERROR 1: Renamed from entriesStream() to getUserEntries(String userId)
   Stream<List<JournalEntry>> getUserEntries(String userId) {
     return _db
         .collection('tbl_entries')
         .where('user_id', isEqualTo: userId)
-    // Note: Using 'where' and 'orderBy' together requires a Firestore Index.
-    // If your entries don't load, check your debug console for a Firebase link to build the index!
         .orderBy('date', descending: true)
         .snapshots()
         .map((snap) => snap.docs.map((doc) => JournalEntry.fromFirestore(doc)).toList());
   }
 
-  // Kept your static fetch method, updated to accept userId optionally
   Future<List<JournalEntry>> getEntries([String? userId]) async {
     final targetUid = userId ?? _uid;
     if (targetUid == null) return [];
@@ -51,16 +64,20 @@ class FirestoreService {
 
 // ── USER ───────────────────────────────────────────────────────────────────
 
+  Stream<AppUser?> userStream(String userId) {
+    return _db.collection('tbl_users').doc(userId).snapshots().map((doc) {
+      if (!doc.exists) return null;
+      return AppUser.fromFirestore(doc);
+    });
+  }
+
   Future<AppUser?> getUser(String userId) async {
     try {
-      // 1. Primary Check: Look for a document where ID == Auth UID
       var doc = await _db.collection('tbl_users').doc(userId).get();
       if (doc.exists) {
         return AppUser.fromFirestore(doc);
       }
 
-      // 2. Fallback Check: Look for a document where the 'user_id' field == Auth UID
-      // (This catches users you manually typed into the Firebase Console)
       var query = await _db.collection('tbl_users')
           .where('user_id', isEqualTo: userId)
           .limit(1)
@@ -70,9 +87,7 @@ class FirestoreService {
         return AppUser.fromFirestore(query.docs.first);
       }
 
-      print("⚠️ No user document found in Firestore for UID: $userId");
       return null;
-
     } catch (e) {
       print("🚨 Firestore Error in getUser: $e");
       return null;
@@ -85,10 +100,9 @@ class FirestoreService {
         user.toFirestore(),
         SetOptions(merge: true),
       );
-      print("✅ User successfully saved to Firestore!");
     } catch (e) {
       print("🚨 Firestore Error in setUser: $e");
-      rethrow; // <--- THIS IS THE MAGIC WORD! It sends the error to the UI.
+      rethrow;
     }
   }
 

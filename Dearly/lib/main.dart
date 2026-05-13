@@ -1,6 +1,8 @@
 import 'package:flutter/material.dart';
 import 'package:firebase_core/firebase_core.dart';
+import 'package:firebase_auth/firebase_auth.dart';
 import 'package:google_fonts/google_fonts.dart';
+import 'package:provider/provider.dart';
 import 'theme/app_theme.dart';
 import 'screens/auth_screen.dart';
 import 'screens/home_screen.dart';
@@ -10,12 +12,28 @@ import 'screens/profile_screen.dart';
 import 'services/firestore_service.dart';
 import 'firebase_options.dart';
 
+// ── NAVIGATION PROVIDER ──
+class NavigationProvider extends ChangeNotifier {
+  int _currentIndex = 0;
+  int get currentIndex => _currentIndex;
+
+  void setTab(int index) {
+    _currentIndex = index;
+    notifyListeners();
+  }
+}
+
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
   await Firebase.initializeApp(
     options: DefaultFirebaseOptions.currentPlatform,
   );
-  runApp(const QuietRoomApp());
+  runApp(
+    ChangeNotifierProvider(
+      create: (_) => NavigationProvider(),
+      child: const QuietRoomApp(),
+    ),
+  );
 }
 
 class QuietRoomApp extends StatelessWidget {
@@ -38,13 +56,27 @@ class _RootGate extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final service = FirestoreService();
-    return StreamBuilder(
+    return StreamBuilder<User?>(
       stream: service.authStateChanges,
       builder: (context, snapshot) {
         if (snapshot.connectionState == ConnectionState.waiting) {
           return const Scaffold(
             body: Center(
               child: CircularProgressIndicator(color: AppTheme.primary),
+            ),
+          );
+        }
+        if (snapshot.hasError) {
+          return Scaffold(
+            body: Center(
+              child: Padding(
+                padding: const EdgeInsets.all(24),
+                child: Text(
+                  'Authentication Error: ${snapshot.error}',
+                  textAlign: TextAlign.center,
+                  style: GoogleFonts.manrope(color: AppTheme.danger),
+                ),
+              ),
             ),
           );
         }
@@ -65,8 +97,6 @@ class MainShell extends StatefulWidget {
 }
 
 class _MainShellState extends State<MainShell> {
-  int _index = 0;
-
   static const _pages = [
     HomeScreen(),
     JournalScreen(),
@@ -76,15 +106,17 @@ class _MainShellState extends State<MainShell> {
 
   @override
   Widget build(BuildContext context) {
+    final nav = Provider.of<NavigationProvider>(context);
+
     return Scaffold(
-      body: IndexedStack(index: _index, children: _pages),
+      body: IndexedStack(index: nav.currentIndex, children: _pages),
       bottomNavigationBar: Container(
         decoration: BoxDecoration(
           color: Colors.white,
           border: Border(top: BorderSide(color: AppTheme.neutralDark, width: 1)),
           boxShadow: [
             BoxShadow(
-              color: Colors.black.withValues(alpha: 0.05),
+              color: Colors.black.withOpacity(0.05),
               blurRadius: 8,
               offset: const Offset(0, -2),
             ),
@@ -100,29 +132,29 @@ class _MainShellState extends State<MainShell> {
                   icon: Icons.home_outlined,
                   activeIcon: Icons.home,
                   label: 'Home',
-                  selected: _index == 0,
-                  onTap: () => setState(() => _index = 0),
+                  selected: nav.currentIndex == 0,
+                  onTap: () => nav.setTab(0),
                 ),
                 _NavItem(
                   icon: Icons.menu_book_outlined,
                   activeIcon: Icons.menu_book,
                   label: 'Journal',
-                  selected: _index == 1,
-                  onTap: () => setState(() => _index = 1),
+                  selected: nav.currentIndex == 1,
+                  onTap: () => nav.setTab(1),
                 ),
                 _NavItem(
                   icon: Icons.auto_awesome_outlined,
                   activeIcon: Icons.auto_awesome,
                   label: 'Mood',
-                  selected: _index == 2,
-                  onTap: () => setState(() => _index = 2),
+                  selected: nav.currentIndex == 2,
+                  onTap: () => nav.setTab(2),
                 ),
                 _NavItem(
                   icon: Icons.person_outline,
                   activeIcon: Icons.person,
                   label: 'Profile',
-                  selected: _index == 3,
-                  onTap: () => setState(() => _index = 3),
+                  selected: nav.currentIndex == 3,
+                  onTap: () => nav.setTab(3),
                 ),
               ],
             ),

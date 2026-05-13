@@ -1,6 +1,55 @@
+import 'dart:io';
 import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
 import '../theme/app_theme.dart';
+
+// ── USER AVATAR ───────────────────────────────────────────────────────────
+class UserAvatar extends StatelessWidget {
+  final String? profilePicture;
+  final String name;
+  final double radius;
+  final Color? backgroundColor;
+  final TextStyle? textStyle;
+
+  const UserAvatar({
+    super.key,
+    this.profilePicture,
+    required this.name,
+    this.radius = 20,
+    this.backgroundColor,
+    this.textStyle,
+  });
+
+  ImageProvider? _getAvatar() {
+    if (profilePicture == null || profilePicture!.isEmpty) return null;
+    if (profilePicture!.startsWith('http')) return NetworkImage(profilePicture!);
+    final file = File(profilePicture!);
+    return file.existsSync() ? FileImage(file) : null;
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final avatarImg = _getAvatar();
+    final initial = name.isNotEmpty ? name[0].toUpperCase() : '?';
+
+    return CircleAvatar(
+      radius: radius,
+      backgroundColor: backgroundColor ?? AppTheme.secondary,
+      backgroundImage: avatarImg,
+      child: avatarImg == null
+          ? Text(
+              initial,
+              style: textStyle ??
+                  GoogleFonts.notoSerif(
+                    color: Colors.white,
+                    fontWeight: FontWeight.w700,
+                    fontSize: radius * 0.8,
+                  ),
+            )
+          : null,
+    );
+  }
+}
 
 // ── APP BAR ────────────────────────────────────────────────────────────────
 class QuietRoomAppBar extends StatelessWidget implements PreferredSizeWidget {

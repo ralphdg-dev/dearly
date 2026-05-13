@@ -27,6 +27,7 @@ class _NewEntryScreenState extends State<NewEntryScreen> {
 
   String _selectedMood = 'Radiant';
   File? _imageFile;
+  String? _remoteImageUrl;
   List<String> _tags = [];
   bool _saving = false;
 
@@ -49,6 +50,7 @@ class _NewEntryScreenState extends State<NewEntryScreen> {
       _locationCtrl.text = widget.existing!.location;
       _selectedMood = widget.existing!.mood;
       _tags = List.from(widget.existing!.tags);
+      _remoteImageUrl = widget.existing!.imageUrl;
     }
   }
 
@@ -62,8 +64,13 @@ class _NewEntryScreenState extends State<NewEntryScreen> {
   }
 
   Future<void> _pickImage() async {
-    final xfile = await _picker.pickImage(source: ImageSource.gallery);
-    if (xfile != null) setState(() => _imageFile = File(xfile.path));
+    final xfile = await _picker.pickImage(source: ImageSource.gallery, imageQuality: 70);
+    if (xfile != null) {
+      setState(() {
+        _imageFile = File(xfile.path);
+        _remoteImageUrl = null; // New image overrides the old one
+      });
+    }
   }
 
   void _addTag(String tag) {
@@ -80,14 +87,26 @@ class _NewEntryScreenState extends State<NewEntryScreen> {
       );
       return;
     }
+
     setState(() => _saving = true);
+
     try {
       final uid = _service.currentUser?.uid ?? '';
+      final entryId = widget.existing?.entryId ?? const Uuid().v4();
+      
+      String? finalImageUrl = _remoteImageUrl;
+
+      // If a new image was picked, upload it first
+      if (_imageFile != null) {
+        finalImageUrl = await _service.uploadEntryImage(entryId, _imageFile!);
+      }
+
       final words = _contentCtrl.text.trim().split(RegExp(r'\s+')).length;
+      
       final entry = JournalEntry(
-        entryId: widget.existing?.entryId ?? const Uuid().v4(),
+        entryId: entryId,
         userId: uid,
-        date: DateTime.now(),
+        date: widget.existing?.date ?? DateTime.now(),
         content: _contentCtrl.text.trim(),
         mood: _selectedMood,
         location: _locationCtrl.text.trim(),
@@ -96,12 +115,15 @@ class _NewEntryScreenState extends State<NewEntryScreen> {
             : _titleCtrl.text.trim(),
         tags: _tags,
         wordCount: words,
+        imageUrl: finalImageUrl,
       );
+
       if (widget.existing != null) {
         await _service.updateEntry(entry);
       } else {
         await _service.addEntry(entry);
       }
+
       if (mounted) Navigator.pop(context, true);
     } catch (e) {
       if (mounted) {
@@ -177,16 +199,16 @@ class _NewEntryScreenState extends State<NewEntryScreen> {
           icon: const Icon(Icons.close, size: 20),
           onPressed: () => Navigator.pop(context),
         ),
-        title: Text('New Entry',
+        title: Text(widget.existing != null ? 'Edit Entry' : 'New Entry',
             style: GoogleFonts.manrope(
                 fontSize: 15, fontWeight: FontWeight.w600, color: AppTheme.textDark)),
         actions: [
-          Padding(
-            padding: const EdgeInsets.only(right: 12),
+          const Padding(
+            padding: EdgeInsets.only(right: 12),
             child: CircleAvatar(
               radius: 18,
               backgroundColor: AppTheme.primaryDark,
-              child: const Icon(Icons.person, size: 18, color: Colors.white),
+              child: Icon(Icons.auto_awesome, size: 18, color: Colors.white),
             ),
           )
         ],
@@ -200,7 +222,7 @@ class _NewEntryScreenState extends State<NewEntryScreen> {
               const Icon(Icons.calendar_today_outlined, size: 13, color: AppTheme.textLight),
               const SizedBox(width: 6),
               Text(
-                DateFormat('EEEE, MMMM d').format(DateTime.now()).toUpperCase(),
+                DateFormat('EEEE, MMMM d').format(widget.existing?.date ?? DateTime.now()).toUpperCase(),
                 style: GoogleFonts.manrope(
                     fontSize: 11, fontWeight: FontWeight.w600,
                     color: AppTheme.textLight, letterSpacing: 0.8),
@@ -269,7 +291,7 @@ class _NewEntryScreenState extends State<NewEntryScreen> {
             children: [
               _ActionChip(
                 icon: Icons.photo_camera_outlined,
-                label: 'Add Memory',
+                label: (_imageFile != null || _remoteImageUrl != null) ? 'Change Memory' : 'Add Memory',
                 onTap: _pickImage,
               ),
               _ActionChip(
@@ -293,19 +315,23 @@ class _NewEntryScreenState extends State<NewEntryScreen> {
           const SizedBox(height: 20),
 
           // ── IMAGE PREVIEW
-          if (_imageFile != null) ...[
+          if (_imageFile != null || _remoteImageUrl != null) ...[
             Stack(
               children: [
                 ClipRRect(
                   borderRadius: BorderRadius.circular(16),
-                  child: Image.file(_imageFile!,
-                      height: 180, width: double.infinity, fit: BoxFit.cover),
+                  child: _imageFile != null 
+                    ? Image.file(_imageFile!, height: 220, width: double.infinity, fit: BoxFit.cover)
+                    : Image.network(_remoteImageUrl!, height: 220, width: double.infinity, fit: BoxFit.cover),
                 ),
                 Positioned(
                   top: 8,
                   right: 8,
                   child: GestureDetector(
-                    onTap: () => setState(() => _imageFile = null),
+                    onTap: () => setState(() {
+                      _imageFile = null;
+                      _remoteImageUrl = null;
+                    }),
                     child: Container(
                       padding: const EdgeInsets.all(4),
                       decoration: const BoxDecoration(

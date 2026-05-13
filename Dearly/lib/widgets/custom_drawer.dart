@@ -1,60 +1,71 @@
 import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
+import 'package:firebase_auth/firebase_auth.dart';
+import 'package:provider/provider.dart';
 import '../theme/app_theme.dart';
 import '../services/firestore_service.dart';
-import '../screens/home_screen.dart';
-import '../screens/journal_screen.dart';
-import '../screens/mood_insights_screen.dart';
-import '../screens/profile_screen.dart';
 import '../screens/settings_screen.dart';
+import '../models/journal_entry.dart';
+import '../main.dart'; // To access NavigationProvider
+import 'shared_widgets.dart';
 
 class CustomDrawer extends StatelessWidget {
   const CustomDrawer({super.key});
 
   @override
   Widget build(BuildContext context) {
+    final service = FirestoreService();
+    final uid = FirebaseAuth.instance.currentUser?.uid;
+    final nav = Provider.of<NavigationProvider>(context, listen: false);
+
     return Drawer(
       backgroundColor: AppTheme.neutral,
       child: Column(
         children: [
           // ── DRAWER HEADER ──
-          Container(
-            width: double.infinity,
-            padding: const EdgeInsets.fromLTRB(24, 64, 24, 24),
-            decoration: const BoxDecoration(
-              color: AppTheme.primary,
-              borderRadius: BorderRadius.only(bottomRight: Radius.circular(24)),
-            ),
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Container(
-                  padding: const EdgeInsets.all(12),
-                  decoration: BoxDecoration(
-                    color: Colors.white.withOpacity(0.2),
-                    shape: BoxShape.circle,
-                  ),
-                  child: const Icon(Icons.auto_awesome, color: Colors.white, size: 28),
+          StreamBuilder<AppUser?>(
+            stream: uid != null ? service.userStream(uid) : null,
+            builder: (context, snapshot) {
+              final user = snapshot.data;
+              final name = user?.name ?? 'The Quiet Room';
+
+              return Container(
+                width: double.infinity,
+                padding: const EdgeInsets.fromLTRB(24, 64, 24, 24),
+                decoration: const BoxDecoration(
+                  color: AppTheme.primary,
+                  borderRadius: BorderRadius.only(bottomRight: Radius.circular(24)),
                 ),
-                const SizedBox(height: 16),
-                Text(
-                  'The Quiet Room',
-                  style: GoogleFonts.notoSerif(
-                    fontSize: 22,
-                    fontWeight: FontWeight.w700,
-                    color: Colors.white,
-                  ),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    UserAvatar(
+                      profilePicture: user?.profilePicture,
+                      name: name,
+                      radius: 30,
+                      backgroundColor: Colors.white.withOpacity(0.2),
+                    ),
+                    const SizedBox(height: 16),
+                    Text(
+                      name,
+                      style: GoogleFonts.notoSerif(
+                        fontSize: 20,
+                        fontWeight: FontWeight.w700,
+                        color: Colors.white,
+                      ),
+                    ),
+                    const SizedBox(height: 4),
+                    Text(
+                      user != null ? 'Your space for reflection' : 'Sign in to sync your journey',
+                      style: GoogleFonts.manrope(
+                        fontSize: 12,
+                        color: Colors.white70,
+                      ),
+                    ),
+                  ],
                 ),
-                const SizedBox(height: 4),
-                Text(
-                  'Your space for reflection',
-                  style: GoogleFonts.manrope(
-                    fontSize: 12,
-                    color: Colors.white70,
-                  ),
-                ),
-              ],
-            ),
+              );
+            },
           ),
 
           const SizedBox(height: 16),
@@ -67,31 +78,41 @@ class CustomDrawer extends StatelessWidget {
                 _DrawerItem(
                   icon: Icons.home_outlined,
                   label: 'Home',
-                  onTap: () => _navigateReplace(context, const HomeScreen()),
+                  onTap: () {
+                    nav.setTab(0);
+                    Navigator.pop(context);
+                  },
                 ),
                 _DrawerItem(
                   icon: Icons.menu_book_outlined,
                   label: 'Journal History',
-                  onTap: () => _navigateReplace(context, const JournalScreen()),
+                  onTap: () {
+                    nav.setTab(1);
+                    Navigator.pop(context);
+                  },
                 ),
                 _DrawerItem(
                   icon: Icons.auto_graph_outlined,
                   label: 'Mood Insights',
-                  onTap: () => _navigateReplace(context, const MoodInsightsScreen()),
+                  onTap: () {
+                    nav.setTab(2);
+                    Navigator.pop(context);
+                  },
                 ),
                 _DrawerItem(
                   icon: Icons.person_outline,
                   label: 'Profile',
-                  onTap: () => _navigateReplace(context, const ProfileScreen()),
+                  onTap: () {
+                    nav.setTab(3);
+                    Navigator.pop(context);
+                  },
                 ),
-                Divider(color: AppTheme.neutralDark, height: 32),
-
-                // 🛑 THE FIX: Settings uses standard push so you can hit "Back" safely!
+                const Divider(indent: 16, endIndent: 16),
                 _DrawerItem(
                   icon: Icons.settings_outlined,
                   label: 'Settings',
                   onTap: () {
-                    Navigator.pop(context); // Close the drawer first
+                    Navigator.pop(context); // Close drawer
                     Navigator.push(
                       context,
                       MaterialPageRoute(builder: (_) => const SettingsScreen()),
@@ -111,24 +132,13 @@ class CustomDrawer extends StatelessWidget {
               color: AppTheme.danger,
               onTap: () async {
                 final service = FirestoreService();
+                Navigator.of(context, rootNavigator: true).popUntil((route) => route.isFirst);
                 await service.signOut();
-                if (context.mounted) {
-                  Navigator.of(context).popUntil((route) => route.isFirst);
-                }
               },
             ),
           ),
         ],
       ),
-    );
-  }
-
-  // Helper for Top-Level screens so they don't build up a massive back-stack
-  void _navigateReplace(BuildContext context, Widget screen) {
-    Navigator.pop(context); // Close the drawer first
-    Navigator.pushReplacement(
-      context,
-      MaterialPageRoute(builder: (_) => screen),
     );
   }
 }
@@ -162,8 +172,6 @@ class _DrawerItem extends StatelessWidget {
       ),
       shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
       onTap: onTap,
-      hoverColor: AppTheme.greenChip,
-      splashColor: AppTheme.greenChip,
     );
   }
 }
